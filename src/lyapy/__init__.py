@@ -1,21 +1,52 @@
-# lyappy/__init__.py
-
 from .lyapy import (
-    ChaoticMap, LogisticMap, UlamMap, GaussMap,
-    BernoulliMap, TentMap, AsymetricMap, ChebyshevMap, GeneralizedBernoulliMap, UlamGeneralized
+    ChaoticMap,
+    LogisticMap,
+    GeneralizedLogisticMap,
+    UlamMap,
+    GeneralizedUlamMap,
+    GaussMap,
+    BernoulliMap,
+    TentMap,
+    AsymetricMap,
+    ChebyshevMap,
+    GeneralizedBernoulliMap,
+    KT1Map,
+    KT2Map,
+    Manneville,
+    ConjugateTentMap,
+    ThalerMap,
 )
 
 def available_maps():
-    """Lista dinamicamente todas as subclasses de ChaoticMap."""
-    # Buscamos as subclasses diretamente da classe base importada
-    maps = [m.__name__ for m in ChaoticMap.__subclasses__()]
+    def _all_subclasses(cls):
+        result = []
+        for sub in cls.__subclasses__():
+            result.append(sub)
+            result.extend(_all_subclasses(sub))
+        return result
+
+    maps = [m.__name__ for m in _all_subclasses(ChaoticMap)]
     print("Available maps on Lyapy:")
     for m in maps:
         print(f" - {m}")
     return maps
 
-# Define o que será exportado ao usar 'from lyappy import *'
 __all__ = [
-    'available_maps', 'LogisticMap', 'UlamMap', 'GaussMap',
-    'BernoulliMap', 'TentMap', 'AsymetricMap', 'ChebyshevMap','GeneralizedBernoulliMap', 'UlamGeneralized'
+    'available_maps',
+    'ChaoticMap',
+    'LogisticMap',
+    'GeneralizedLogisticMap',
+    'UlamMap',
+    'GeneralizedUlamMap',
+    'GaussMap',
+    'BernoulliMap',
+    'TentMap',
+    'AsymetricMap',
+    'ChebyshevMap',
+    'GeneralizedBernoulliMap',
+    'KT1Map',
+    'KT2Map',
+    'Manneville',
+    'ConjugateTentMap',
+    'ThalerMap',
 ]
