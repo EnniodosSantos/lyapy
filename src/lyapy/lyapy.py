@@ -98,22 +98,35 @@ class ChaoticMap:
         plt.grid(True, alpha=0.3)
         plt.show()
 
+
+
     def lyapunov_summary(self, dec=False):
         est = self.lyapunov_estimated(dec=dec)
         series = self.time_series(dec=dec)
 
-        theo_val = self.theoretical_lyapunov
-        theo = theo_val if dec else float(theo_val)
+        # Inicializa variáveis de comparação
+        theo = None
+        error_str = "N/A"
 
-        theo_dec = D(str(theo_val))
-        est_dec = D(str(est))
-        error = abs((est_dec - theo_dec) / theo_dec) * 100 if theo_dec != 0 else D(0)
+        try:
+            theo_val = self.theoretical_lyapunov
+            if theo_val is not None:
+                theo = theo_val if dec else float(theo_val)
+                theo_dec = D(str(theo_val))
+                est_dec = D(str(est))
+
+                # Cálculo do erro com fallback para zero
+                error = abs((est_dec - theo_dec) / theo_dec) * 100 if theo_dec != 0 else D(0)
+                error_str = f"{error:.8f}%" if dec else f"{float(error):.4f}%"
+        except (NotImplementedError, TypeError):
+            # Se não houver valor teórico, theo e error_str permanecem como None e "N/A"
+            pass
 
         return {
             "map": self.__class__.__name__,
             "theoretical": theo,
             "estimated": est,
-            "error_percent": f"{error:.8f}%" if dec else f"{float(error):.4f}%",
+            "error_percent": error_str,
             "steps": self.steps,
             "transient": self.trans,
             "x0": self.x0 if dec else float(self.x0),
