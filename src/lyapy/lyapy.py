@@ -133,7 +133,7 @@ class ChaoticMap:
             "time_series": series
         }
 
-    def plot_density(self, bins=50, figsize=(8, 5), color='#2c3e50', show_analytical=True):
+    def plot_density(self, bins=50, figsize=(8, 5), color='#2c3e50', show_analytical=True, style='scatter'):
         orbit = self.time_series()
 
         a, b = float(self.domain[0]), float(self.domain[1])
@@ -143,14 +143,13 @@ class ChaoticMap:
         x_bins = 0.5 * (bordas[:-1] + bordas[1:])
 
         fig, ax = plt.subplots(figsize=figsize)
-        ax.bar(
-            x_bins, rho_est,
-            width=delta_x,
-            alpha=0.6,
-            color=color,
-            edgecolor='k',
-            linewidth=0.4,
-            label=r'$\rho_{\mathrm{est}}$')
+
+        if style == 'scatter':
+            ax.scatter(x_bins, rho_est, s=10, color=color, alpha=0.7, label=r'$\rho_{\mathrm{est}}$')
+        elif style == 'bar':
+            ax.bar(x_bins, rho_est, width=delta_x, alpha=0.6, color=color, edgecolor='k', linewidth=0.4, label=r'$\rho_{\mathrm{est}}$')
+        else:
+            raise ValueError(f"style='{style}'Use 'scatter' or 'bar'.")
 
         if show_analytical:
             try:
@@ -166,7 +165,6 @@ class ChaoticMap:
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
-
 
 # ============== Maps ==========================================================================================
 
