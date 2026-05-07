@@ -152,11 +152,12 @@ class ChaoticMap:
             raise ValueError(f"style='{style}'Use 'scatter' or 'bar'.")
 
         if show_analytical:
-            try:
-                rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_bins])
-                ax.plot(x_bins, rho_vals, 'cornflowerblue', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
-            except (NotImplementedError, AttributeError, ZeroDivisionError):
-                pass
+        try:
+            x_curve = np.linspace(a + 1e-9, b - 1e-9, 500)
+            rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_curve])
+            ax.plot(x_curve, rho_vals, color='cornflowerblue', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
+        except (NotImplementedError, AttributeError, ZeroDivisionError):
+            pass
 
         ax.set_xlabel('$x$')
         ax.set_ylabel(r'$\rho(x)$')
