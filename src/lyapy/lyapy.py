@@ -154,7 +154,7 @@ class ChaoticMap:
         if show_analytical:
             try:
                 rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_bins])
-                ax.plot(x_bins, rho_vals, 'b-', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
+                ax.plot(x_bins, rho_vals, 'cornflowerblue', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
             except (NotImplementedError, AttributeError, ZeroDivisionError):
                 pass
 
