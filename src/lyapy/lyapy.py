@@ -161,7 +161,7 @@ class ChaoticMap:
 
         ax.set_xlabel('$x$')
         ax.set_ylabel(r'$\rho(x)$')
-        ax.set_title(f'Densidade Invariante — {self.__class__.__name__}')
+        ax.set_title(f'Invariant Density — {self.__class__.__name__}')
         ax.legend()
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
