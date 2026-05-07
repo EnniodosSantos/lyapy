@@ -133,6 +133,40 @@ class ChaoticMap:
             "time_series": series
         }
 
+    def plot_density(self, bins=50, figsize=(8, 5), color='#2c3e50', show_analytical=True):
+        orbit = self.time_series()
+
+        a, b = float(self.domain[0]), float(self.domain[1])
+        contagens, bordas = np.histogram(orbit, bins=bins, range=(a, b))
+        delta_x = bordas[1] - bordas[0]
+        rho_est = contagens / (len(orbit) * delta_x)
+        x_bins = 0.5 * (bordas[:-1] + bordas[1:])
+
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.bar(
+            x_bins, rho_est,
+            width=delta_x,
+            alpha=0.6,
+            color=color,
+            edgecolor='k',
+            linewidth=0.4,
+            label=r'$\rho_{\mathrm{est}}$')
+
+        if show_analytical:
+            try:
+                rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_bins])
+                ax.plot(x_bins, rho_vals, 'r-', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
+            except (NotImplementedError, AttributeError, ZeroDivisionError):
+                pass
+
+        ax.set_xlabel('$x$')
+        ax.set_ylabel(r'$\rho(x)$')
+        ax.set_title(f'Densidade Invariante — {self.__class__.__name__}')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
 
 # ============== Maps ==========================================================================================
 
