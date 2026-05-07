@@ -149,7 +149,7 @@ class ChaoticMap:
         elif style == 'bar':
             ax.bar(x_bins, rho_est, width=delta_x, alpha=0.6, color=color, edgecolor='k', linewidth=0.4, label=r'$\rho_{\mathrm{est}}$')
         else:
-            raise ValueError(f"style='{style}'Use 'scatter' or 'bar'.")
+            raise ValueError(f"style='{style}' inválido. Use 'scatter' ou 'bar'.")
 
         if show_analytical:
             try:
@@ -159,6 +159,7 @@ class ChaoticMap:
             except (NotImplementedError, AttributeError, ZeroDivisionError):
                 pass
 
+        ax.set_ylim(0, np.percentile(rho_est, 99) * 1.3)
         ax.set_xlabel('$x$')
         ax.set_ylabel(r'$\rho(x)$')
         ax.set_title(f'Invariant Density — {self.__class__.__name__}')
