@@ -191,55 +191,38 @@ class ChaoticMap:
 
 
     def controlled_series(self, target_lambda, steps=None, trans=None, dec=False, plot=False):
-
         lambda_s = self.lyapunov_estimated()
         delta = target_lambda - lambda_s
-
         if delta <= 0:
             raise ValueError(
-                f"target_lambda ({target_lambda:.4f}) deve ser maior que o expoente "
-                f"do mapa semente ({lambda_s:.4f}). A transformação exige a > 1."
+            f"target_lambda ({target_lambda:.4f}) deve ser maior que o expoente "
+            f"do mapa semente ({lambda_s:.4f}). A transformação exige a > 1."
             )
-
         a = D(str(math.exp(delta)))
         steps = steps or self.steps
         trans = trans or self.trans
 
-    # descarta transiente com o mapa original
         x = self.x0
         for _ in range(trans):
             x = self.f(x)
 
-    # gera série com o mapa transformado
         orbit = []
         for _ in range(steps):
             x = (a * self.f(x)) % D('1')
             orbit.append(x)
 
-    # valida o expoente alcançado
-        soma = D(0)
-        x_val = self.x0
-        for _ in range(trans):
-            x_val = self.f(x_val)
-        for xk in orbit:
-            deriv = abs(a * self.df(xk))
-            soma += deriv.ln() if deriv > 0 else D('-1e10')
-        lambda_achieved = float(soma / D(steps))
-
-        error = abs(lambda_achieved - target_lambda) / abs(target_lambda) * 100
-        series = orbit if dec else np.array(orbit, dtype=float)
-
         if plot:
             self._plot_series(orbit)
 
-        return {
-            "gain_a":          float(a),
-            "lambda_seed":     lambda_s,
-            "lambda_target":   target_lambda,
-            "lambda_achieved": lambda_achieved,
-            "error_percent":   f"{error:.4f}%",
-            "time_series":     series,
-        }
+        return orbit if dec else np.array(orbit, dtype=float)
+
+    def lyapunov_from_series(self, series):
+        orbit = [D(str(x)) for x in series]
+        soma = D(0)
+        for xk in orbit:
+            deriv = abs(self.df(xk))
+            soma += deriv.ln() if deriv > 0 else D('-1e10')
+        return float(soma / D(len(orbit)))
 
 # ============== Maps ==========================================================================================
 
