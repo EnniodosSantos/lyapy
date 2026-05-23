@@ -25,28 +25,8 @@ def available_maps():
             result.extend(_all_subclasses(sub))
         return result
 
-    maps = [m.__name__ for m in _all_subclasses(ChaoticMap)]
+    maps = sorted(set(m.__name__ for m in _all_subclasses(ChaoticMap)))
     print("Available maps on Lyapy:")
     for m in maps:
-        print(f" - {m}")
+        print(f"  - {m}")
     return maps
-
-__all__ = [
-    'available_maps',
-    'ChaoticMap',
-    'LogisticMap',
-    'GeneralizedLogisticMap',
-    'UlamMap',
-    'GeneralizedUlamMap',
-    'GaussMap',
-    'BernoulliMap',
-    'TentMap',
-    'AsymetricMap',
-    'ChebyshevMap',
-    'GeneralizedBernoulliMap',
-    'KT1Map',
-    'KT2Map',
-    'Manneville',
-    'ConjugateTentMap',
-    'ThalerMap',
-]

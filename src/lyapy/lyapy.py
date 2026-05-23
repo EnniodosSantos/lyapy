@@ -64,14 +64,14 @@ class ChaoticMap:
         return np.array([float(v) for v in evolution])
 
     def _plot_convergence(self, data):
-        plt.figure(figsize=(8, 4))
-        plt.plot(data, label="Estimated $\lambda$")
-        plt.axhline(float(self.theoretical_lyapunov), color='r', ls='--', label="Theoretical")
-        plt.title(f"Lyapunov Convergence - {self.__class__.__name__}")
-        plt.xlabel("Iterations")
-        plt.ylabel("$\lambda$")
+        plt.figure(figsize=(10, 4))
+        plt.plot(data, lw=0.5, color='#2c3e50', label="Estimated $\\lambda$")
+        plt.axhline(float(self.theoretical_lyapunov), color='r', ls='--', lw=0.8, label="Theoretical")
+        plt.title(f"Lyapunov Convergence: {self.__class__.__name__} (x0={float(self.x0):.4f})")
+        plt.xlabel("n (iterations)")
+        plt.ylabel("$\\lambda$")
         plt.legend()
-        plt.grid(True)
+        plt.grid(True, alpha=0.3)
         plt.show()
 
     def time_series(self, dec=False, plot=False):
@@ -167,6 +167,79 @@ class ChaoticMap:
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+
+    def return_map(self, plot=False):
+        orbit = self.time_series()
+        x_n  = orbit[:-1]
+        x_n1 = orbit[1:]
+
+        if plot:
+            self._plot_return_map(x_n, x_n1)
+
+        return x_n, x_n1
+
+    def _plot_return_map(self, x_n, x_n1):
+        plt.figure(figsize=(6, 6))          # quadrado — proporção natural para esse plot
+        plt.plot(x_n, x_n1, ',', color='#2c3e50', alpha=0.4, markersize=1.5)
+        plt.title(f"Return Map — {self.__class__.__name__} (x0={float(self.x0):.4f})")
+        plt.xlabel("$x_n$")
+        plt.ylabel("$x_{n+1}$")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+
+    def controlled_series(self, target_lambda, steps=None, trans=None, dec=False, plot=False):
+
+        lambda_s = self.lyapunov_estimated()
+        delta = target_lambda - lambda_s
+
+        if delta <= 0:
+            raise ValueError(
+                f"target_lambda ({target_lambda:.4f}) deve ser maior que o expoente "
+                f"do mapa semente ({lambda_s:.4f}). A transformação exige a > 1."
+            )
+
+        a = D(str(math.exp(delta)))
+        steps = steps or self.steps
+        trans = trans or self.trans
+
+    # descarta transiente com o mapa original
+        x = self.x0
+        for _ in range(trans):
+            x = self.f(x)
+
+    # gera série com o mapa transformado
+        orbit = []
+        for _ in range(steps):
+            x = (a * self.f(x)) % D('1')
+            orbit.append(x)
+
+    # valida o expoente alcançado
+        soma = D(0)
+        x_val = self.x0
+        for _ in range(trans):
+            x_val = self.f(x_val)
+        for xk in orbit:
+            deriv = abs(a * self.df(xk))
+            soma += deriv.ln() if deriv > 0 else D('-1e10')
+        lambda_achieved = float(soma / D(steps))
+
+        error = abs(lambda_achieved - target_lambda) / abs(target_lambda) * 100
+        series = orbit if dec else np.array(orbit, dtype=float)
+
+        if plot:
+            self._plot_series(orbit)
+
+        return {
+            "gain_a":          float(a),
+            "lambda_seed":     lambda_s,
+            "lambda_target":   target_lambda,
+            "lambda_achieved": lambda_achieved,
+            "error_percent":   f"{error:.4f}%",
+            "time_series":     series,
+        }
 
 # ============== Maps ==========================================================================================
 
