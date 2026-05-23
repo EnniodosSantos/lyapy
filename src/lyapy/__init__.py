@@ -29,4 +29,3 @@ def available_maps():
     print("Available maps on Lyapy:")
     for m in maps:
         print(f"  - {m}")
-    return maps
