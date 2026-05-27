@@ -198,7 +198,7 @@ class ChaoticMap:
             f"target_lambda ({target_lambda:.4f}) deve ser maior que o expoente "
             f"do mapa semente ({lambda_s:.4f}). A transformação exige a > 1."
             )
-        a = D(str(math.exp(delta)))
+        a = D(str(delta)).exp()
         steps = steps or self.steps
         trans = trans or self.trans
 
