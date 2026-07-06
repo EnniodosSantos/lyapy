@@ -190,7 +190,7 @@ class ChaoticMap:
         plt.show()
 
 
-    def controlled_series(self, target_lambda, steps=None, trans=None, dec=False, plot=False):
+    '''def controlled_series(self, target_lambda, steps=None, trans=None, dec=False, plot=False):
         lambda_s = self.lyapunov_estimated()
         delta = target_lambda - lambda_s
         if delta <= 0:
@@ -222,7 +222,7 @@ class ChaoticMap:
         for xk in orbit:
             deriv = abs(self.df(xk))
             soma += deriv.ln() if deriv > 0 else D('-1e10')
-        return float(soma / D(len(orbit)))
+        return float(soma / D(len(orbit)))'''
 
 # ============== Maps ==========================================================================================
 
