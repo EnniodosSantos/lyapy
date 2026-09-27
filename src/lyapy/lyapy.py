@@ -4,103 +4,59 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Atalho interno para não repetir dc.Decimal em todo o código
 D = dc.Decimal
 
 
 class ChaoticMap:
-    # Constantes exatas (parsing de string não depende de dc.getcontext().prec) —
-    # seguras para cachear em nível de classe.
-    _ZERO = D('0')
-    _ONE = D('1')
-    _TWO = D('2')
-    _FOUR = D('4')
-    _NEG_ONE = D('-1')
-    _NEG_TWO = D('-2')
-    _NEG_FOUR = D('-4')
-    _PI = D(str(math.pi))
-
-    # Override para True em mapas cuja derivada é sempre positiva
-    # (evita abs() por iteração): Bernoulli, GeneralizedBernoulli, KT1, KT2.
-    _deriv_nonneg = False
-
     def __init__(self, steps, trans, x0=None, prec=50, seed=None):
         dc.getcontext().prec = prec
         self.steps = steps
         self.trans = trans
         self.prec = prec
-        self._orbit_cache = None
 
         if seed is not None:
             random.seed(seed)
 
-        self.x0 = self._to_decimal(x0) if x0 is not None else self.__get_initial_condition()
+        self.x0 = D(str(x0)) if x0 is not None else self.__get_initial_condition()
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: x0={self.x0:.4f}, steps={self.steps}, trans={self.trans}>"
-
-    @staticmethod
-    def _to_decimal(v):
-        # D(int) evita o parsing de string quando o valor já é int.
-        return D(v) if isinstance(v, int) else D(str(v))
-
-    def _local_ctx(self):
-        # Isola dc.getcontext().prec por chamada, evitando contaminação
-        # entre instâncias com prec diferente.
-        ctx = dc.getcontext().copy()
-        ctx.prec = self.prec
-        return dc.localcontext(ctx)
 
     def __get_initial_condition(self):
         a, b = self.domain
         return D(str(random.uniform(a, b)))
 
-    def _get_orbit(self):
-        # Órbita (pós-transiente) computada uma única vez e reaproveitada por
-        # time_series, lyapunov_estimated, lyapunov_convergence, return_map
-        # e plot_density (via time_series).
-        if self._orbit_cache is None:
-            with self._local_ctx():
-                f = self.f
-                x = self.x0
-                for _ in range(self.trans):
-                    x = f(x)
-                orbit = []
-                for _ in range(self.steps):
-                    x = f(x)
-                    orbit.append(x)
-                self._orbit_cache = orbit
-        return self._orbit_cache
-
     def lyapunov_estimated(self, dec=False):
-        orbit = self._get_orbit()
-        with self._local_ctx():
-            df = self.df
-            soma = D(0)
-            if self._deriv_nonneg:
-                for x in orbit:
-                    deriv = df(x)
-                    soma += deriv.ln() if deriv > 0 else D("-1e10")
+        x = self.x0
+        soma = D(0)
+
+        for _ in range(self.trans):
+            x = self.f(x)
+
+        for _ in range(self.steps):
+            x = self.f(x)
+            deriv = abs(self.df(x))
+            if deriv > 0:
+                soma += deriv.ln()
             else:
-                for x in orbit:
-                    deriv = abs(df(x))
-                    soma += deriv.ln() if deriv > 0 else D("-1e10")
-            lambda_est = soma / D(self.steps)
+                soma += D("-1e10")
+
+        lambda_est = soma / D(self.steps)
         return lambda_est if dec else float(lambda_est)
 
     def lyapunov_convergence(self, plot=False):
-        orbit = self._get_orbit()
-        with self._local_ctx():
-            df = self.df
-            soma = D(0)
-            evolution = []
-            if self._deriv_nonneg:
-                for i, x in enumerate(orbit, start=1):
-                    soma += df(x).ln()
-                    evolution.append(soma / D(i))
-            else:
-                for i, x in enumerate(orbit, start=1):
-                    soma += abs(df(x)).ln()
-                    evolution.append(soma / D(i))
+        x = self.x0
+        for _ in range(self.trans):
+            x = self.f(x)
+
+        soma = D(0)
+        evolution = []
+
+        for i in range(1, self.steps + 1):
+            x = self.f(x)
+            soma += abs(self.df(x)).ln()
+            evolution.append(soma / D(i))
 
         if plot:
             self._plot_convergence(evolution)
@@ -119,7 +75,14 @@ class ChaoticMap:
         plt.show()
 
     def time_series(self, dec=False, plot=False):
-        orbit = self._get_orbit()
+        x = self.x0
+        for _ in range(self.trans):
+            x = self.f(x)
+
+        orbit = []
+        for _ in range(self.steps):
+            x = self.f(x)
+            orbit.append(x)
 
         if plot:
             self._plot_series(orbit)
@@ -135,10 +98,13 @@ class ChaoticMap:
         plt.grid(True, alpha=0.3)
         plt.show()
 
+
+
     def lyapunov_summary(self, dec=False):
         est = self.lyapunov_estimated(dec=dec)
         series = self.time_series(dec=dec)
 
+        # Inicializa variáveis de comparação
         theo = None
         error_str = "N/A"
 
@@ -149,9 +115,11 @@ class ChaoticMap:
                 theo_dec = D(str(theo_val))
                 est_dec = D(str(est))
 
+                # Cálculo do erro com fallback para zero
                 error = abs((est_dec - theo_dec) / theo_dec) * 100 if theo_dec != 0 else D(0)
                 error_str = f"{error:.8f}%" if dec else f"{float(error):.4f}%"
         except (NotImplementedError, TypeError):
+            # Se não houver valor teórico, theo e error_str permanecem como None e "N/A"
             pass
 
         return {
@@ -186,12 +154,7 @@ class ChaoticMap:
         if show_analytical:
             try:
                 x_curve = np.linspace(a + 1e-9, b - 1e-9, 500)
-                # Curva de referência: prec reduzido (não precisa do prec da instância
-                # para uma linha de plot; vetorização real em float64 exigiria
-                # reimplementar cada density() fora do Decimal).
-                with dc.localcontext() as ctx:
-                    ctx.prec = 20
-                    rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_curve])
+                rho_vals = np.array([float(self.density(D(str(xi)))) for xi in x_curve])
                 ax.plot(x_curve, rho_vals, color='cornflowerblue', linewidth=2, label=r'$\rho_{\mathrm{exato}}$')
             except (NotImplementedError, AttributeError, ZeroDivisionError):
                 pass
@@ -205,9 +168,10 @@ class ChaoticMap:
         plt.tight_layout()
         plt.show()
 
+
     def return_map(self, plot=False):
-        orbit = self._get_orbit()
-        x_n = orbit[:-1]
+        orbit = self.time_series()
+        x_n  = orbit[:-1]
         x_n1 = orbit[1:]
 
         if plot:
@@ -216,7 +180,7 @@ class ChaoticMap:
         return x_n, x_n1
 
     def _plot_return_map(self, x_n, x_n1):
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(6, 6))          # quadrado — proporção natural para esse plot
         plt.plot(x_n, x_n1, ',', color='#2c3e50', alpha=0.4, markersize=1.5)
         plt.title(f"Return Map — {self.__class__.__name__} (x0={float(self.x0):.4f})")
         plt.xlabel("$x_n$")
@@ -226,86 +190,126 @@ class ChaoticMap:
         plt.show()
 
 
+    '''def controlled_series(self, target_lambda, steps=None, trans=None, dec=False, plot=False):
+        lambda_s = self.lyapunov_estimated()
+        delta = target_lambda - lambda_s
+        if delta <= 0:
+            raise ValueError(
+            f"target_lambda ({target_lambda:.4f}) deve ser maior que o expoente "
+            f"do mapa semente ({lambda_s:.4f}). A transformação exige a > 1."
+            )
+        a = D(str(delta)).exp()
+        steps = steps or self.steps
+        trans = trans or self.trans
+
+        x = self.x0
+        for _ in range(trans):
+            x = self.f(x)
+
+        orbit = []
+        for _ in range(steps):
+            x = (a * self.f(x)) % D('1')
+            orbit.append(x)
+
+        if plot:
+            self._plot_series(orbit)
+
+        return orbit if dec else np.array(orbit, dtype=float)
+
+    def lyapunov_from_series(self, series):
+        orbit = [D(str(x)) for x in series]
+        soma = D(0)
+        for xk in orbit:
+            deriv = abs(self.df(xk))
+            soma += deriv.ln() if deriv > 0 else D('-1e10')
+        return float(soma / D(len(orbit)))'''
+
 # ============== Maps ==========================================================================================
 
 class LogisticMap(ChaoticMap):
     domain = (0, 1)
 
     def __init__(self, steps, trans, r=4, x0=None, prec=50, seed=None):
-        self.r = self._to_decimal(r)
+        self.r = D(str(r))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
-        return self.r * x * (self._ONE - x)
+        return self.r * x * (D('1') - x)
 
     def df(self, x):
-        return self.r * (self._ONE - self._TWO * x)
+        return self.r * (D('1') - D('2') * x)
 
     @property
     def theoretical_lyapunov(self):
-        if self.r == self._FOUR:
-            return self._TWO.ln()
+        if self.r == D('4'):
+            return D('2').ln()
         return None
 
     def density(self, x):
-        denom = self._PI * (x * (self._ONE - x)).sqrt()
-        return self._ONE / denom if denom != 0 else D('inf')
+        pi = D(str(math.pi))
+        denom = pi * (x * (D('1') - x)).sqrt()
+        return D('1') / denom if denom != 0 else D('inf')
 
 
 class GeneralizedLogisticMap(ChaoticMap):
     domain = (0, 1)
 
     def __init__(self, steps, trans, b=1, x0=None, prec=50, seed=None):
-        self.b = self._to_decimal(b)
+        self.b = D(str(b))          # era self.r = D(str(r)) — variável errada
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
-        return (self._FOUR ** self.b) * x * (self._ONE - x ** (self._ONE / self.b)) ** self.b
+        return (D('4') ** self.b) * x * (D('1') - x ** (D('1') / self.b)) ** self.b
 
     def df(self, x):
-        term = self._ONE - x ** (self._ONE / self.b)
-        return (self._FOUR ** self.b) * (term ** (self.b - self._ONE)) * (self._ONE - self._TWO * x ** (self._ONE / self.b))
+        term = D('1') - x ** (D('1') / self.b)
+        return (D('4') ** self.b) * (term ** (self.b - D('1'))) * (D('1') - D('2') * x ** (D('1') / self.b))
+
 
     @property
     def theoretical_lyapunov(self):
-        return self._TWO.ln()
+        return D('2').ln()
 
     def density(self, x):
-        exp = self._ONE / (self._TWO * self.b) - self._ONE
-        numerator = x ** exp
-        denominator = (self._ONE - x ** (self._ONE / self.b)).sqrt()
-        return numerator / (self._PI * self.b * denominator)
+        pi = D(str(math.pi))
+        exp = D('1') / (D('2') * self.b) - D('1')          # 1/(2b) - 1
+        numerator = x ** exp                                 # x^(1/(2b) - 1)
+        denominator = (D('1') - x ** (D('1') / self.b)).sqrt()  # sqrt(1 - x^(1/b))
+        return numerator / (pi * self.b * denominator)
+
+
 
 
 class UlamMap(ChaoticMap):
     domain = (-1, 1)
 
     def f(self, x):
-        return self._ONE - self._TWO * x * x
+        return D('1') - D('2') * x**2
 
     def df(self, x):
-        return self._NEG_FOUR * x
+        return D('-4') * x
 
     @property
     def theoretical_lyapunov(self):
-        return self._TWO.ln()
+        return D('2').ln()
 
     def density(self, x):
-        return self._ONE / (self._PI * (self._ONE - x * x).sqrt())
+        pi = D(str(math.pi))
+        return D('1') / (pi * (D('1') - x**2).sqrt())
 
 
 class GeneralizedUlamMap(ChaoticMap):
-    domain = (-1, 1)
+    domain = (-1,1)
 
     def __init__(self, steps, trans, r, x0=None, prec=50, seed=None):
-        self.r = self._to_decimal(r)
+        self.r = D(str(r))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
-        return self._ONE - self.r * x * x
+        return D('1') - self.r* x**2
 
     def df(self, x):
-        return self._NEG_TWO * self.r * x
+        return D('-2')*self.r*x
 
     @property
     def theoretical_lyapunov(self):
@@ -314,20 +318,19 @@ class GeneralizedUlamMap(ChaoticMap):
 
 class BernoulliMap(ChaoticMap):
     domain = (0, 1)
-    _deriv_nonneg = True
 
     def f(self, x):
-        return (self._TWO * x) % self._ONE
+        return (D('2') * x) % D('1')
 
     def df(self, x):
-        return self._TWO
+        return D('2')
 
     @property
     def theoretical_lyapunov(self):
-        return self._TWO.ln()
+        return D('2').ln()
 
     def density(self, x):
-        return self._ONE
+        return D('1')
 
 
 class GaussMap(ChaoticMap):
@@ -335,59 +338,58 @@ class GaussMap(ChaoticMap):
 
     def f(self, x):
         if x == 0:
-            return self._ZERO
-        inv_x = self._ONE / x
+            return D(0)
+        inv_x = D('1') / x
         return inv_x - inv_x.to_integral_value(rounding=dc.ROUND_FLOOR)
 
     def df(self, x):
         if x == 0:
-            return self._ZERO
-        return self._NEG_ONE / (x * x)
+            return D(0)
+        return D('-1') / (x**2)
 
     @property
     def theoretical_lyapunov(self):
-        return (self._PI * self._PI) / (D('6') * self._TWO.ln())
+        pi = D(str(math.pi))
+        return (pi**2) / (D('6') * D('2').ln())
 
     def density(self, x):
-        ln2 = self._TWO.ln()
-        return self._ONE / (ln2 * (self._ONE + x))
+        ln2 = D('2').ln()
+        return D('1') / (ln2 * (D('1') + x))
 
 
 class TentMap(ChaoticMap):
     domain = (0, 1)
 
     def f(self, x):
-        return self._TWO * min(x, self._ONE - x)
+        return D('2') * min(x, D('1') - x)
 
     def df(self, x):
-        return self._TWO if x < D('0.5') else self._NEG_TWO
+        return D('2') if x < D('0.5') else D('-2')
 
     @property
     def theoretical_lyapunov(self):
-        return self._TWO.ln()
+        return D('2').ln()
 
     def density(self, x):
-        return self._ONE
+        return D('1')
 
 
 class AsymetricMap(ChaoticMap):
     domain = (0, 1)
-    _A = D('0.4')
-    _B = D('0.6')
 
     def f(self, x):
-        return (x / self._A) if x < self._A else ((self._ONE - x) / self._B)
+        return (x / D('0.4')) if x < D('0.4') else ((D('1') - x) / D('0.6'))
 
     def df(self, x):
-        return self._ONE / self._A if x < self._A else self._NEG_ONE / self._B
+        return D('1') / D('0.4') if x < D('0.4') else D('-1') / D('0.6')
 
     @property
     def theoretical_lyapunov(self):
-        a = self._A
-        return -(a * a.ln()) - (self._B * self._B.ln())
+        a = D('0.4')
+        return -(a * a.ln()) - ((D('1') - a) * (D('1') - a).ln())
 
     def density(self, x):
-        return self._ONE
+        return D('1')
 
 
 class ChebyshevMap(ChaoticMap):
@@ -398,15 +400,15 @@ class ChebyshevMap(ChaoticMap):
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
-        t0, t1 = self._ONE, x
+        t0, t1 = D('1'), x
         for _ in range(self.k - 1):
-            t0, t1 = t1, self._TWO * x * t1 - t0
+            t0, t1 = t1, D('2') * x * t1 - t0
         return t1
 
     def df(self, x):
-        u0, u1 = self._ONE, self._TWO * x
+        u0, u1 = D('1'), D('2') * x
         for _ in range(self.k - 2):
-            u0, u1 = u1, self._TWO * x * u1 - u0
+            u0, u1 = u1, D('2') * x * u1 - u0
         return D(self.k) * u1
 
     @property
@@ -414,19 +416,19 @@ class ChebyshevMap(ChaoticMap):
         return D(self.k).ln()
 
     def density(self, x):
-        return self._ONE / (self._PI * (self._ONE - x * x).sqrt())
+        pi = D(str(math.pi))
+        return D('1') / (pi * (D('1') - x**2).sqrt())
 
 
 class GeneralizedBernoulliMap(ChaoticMap):
     domain = (0, 1)
-    _deriv_nonneg = True
 
     def __init__(self, steps, trans, m=2, x0=None, prec=50, seed=None):
-        self.m = self._to_decimal(m)
+        self.m = D(str(m))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
-        return (self.m * x) % self._ONE
+        return (self.m * x) % D('1')
 
     def df(self, x):
         return self.m
@@ -436,15 +438,13 @@ class GeneralizedBernoulliMap(ChaoticMap):
         return self.m.ln()
 
     def density(self, x):
-        return self._ONE
-
+        return D('1')
 
 class KT1Map(ChaoticMap):
     domain = (0, 1)
-    _deriv_nonneg = True
 
-    def __init__(self, steps, trans, gamma=None, x0=None, prec=50, seed=None):
-        self.gamma = self._to_decimal(gamma)
+    def __init__(self, steps, trans, gamma = None, x0=None, prec=50, seed=None):
+        self.gamma = D(str(gamma))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
@@ -452,134 +452,128 @@ class KT1Map(ChaoticMap):
         if x < g:
             return x / g
         else:
-            return (g * x - g * g) / (self._ONE - g)
+            return (g * x - g**2) / (D('1') - g)
 
     def df(self, x):
         g = self.gamma
         if x < g:
-            return self._ONE / g
+            return D('1') / g
         else:
-            return g / (self._ONE - g)
+            return g / (D('1') - g)
 
     @property
     def theoretical_lyapunov(self):
         g = self.gamma
-        term1 = (self._ONE / (self._TWO - g)) * (self._ONE / g).ln()
-        term2 = ((self._ONE - g) / (self._TWO - g)) * (g / (self._ONE - g)).ln()
+        term1 = (D('1') / (D('2') - g)) * (D('1') / g).ln()
+        term2 = ((D('1') - g) / (D('2') - g)) * (g / (D('1') - g)).ln()
         return term1 + term2
-
 
 class KT2Map(ChaoticMap):
     domain = (0, 1)
-    _deriv_nonneg = True
 
-    def __init__(self, steps, trans, gamma=None, x0=None, prec=50, seed=None):
-        self.gamma = self._to_decimal(gamma)
+    def __init__(self, steps, trans, gamma = None, x0=None, prec=50, seed=None):
+        self.gamma = D(str(gamma))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
         g = self.gamma
-        if x < self._ONE - g:
-            return (g * x) / (self._ONE - g) + self._ONE - g
+        if x < D('1') - g:
+            return (g * x) / (D('1') - g) + D('1') - g
         else:
-            return (x - (self._ONE - g)) / g
+            return (x - (D('1') - g)) / g
 
     def df(self, x):
         g = self.gamma
-        if x < self._ONE - g:
-            return g / (self._ONE - g)
+        if x < D('1') - g:
+            return g / (D('1') - g)
         else:
-            return self._ONE / g
+            return D('1') / g
 
     @property
     def theoretical_lyapunov(self):
         g = self.gamma
-        term1 = (self._ONE / (self._TWO - g)) * (self._ONE / g).ln()
-        term2 = ((self._ONE - g) / (self._TWO - g)) * (g / (self._ONE - g)).ln()
+        term1 = (D('1') / (D('2') - g)) * (D('1') / g).ln()
+        term2 = ((D('1') - g) / (D('2') - g)) * (g / (D('1') - g)).ln()
         return term1 + term2
-
 
 class Manneville(ChaoticMap):
     domain = (0, 1)
 
-    def __init__(self, steps, trans, epslon=None, x0=None, prec=50, seed=None):
-        self.epslon = self._to_decimal(epslon)
+    def __init__(self, steps, trans, epslon = None, x0=None, prec=50, seed=None):
+        self.epslon = D(str(epslon))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
         e = self.epslon
-        return ((self._ONE + e) * x + (self._ONE - e) * x * x) % self._ONE
+        return ((D('1') + e) * x + (D('1') - e) * x**2) % D('1')
 
     def df(self, x):
         e = self.epslon
-        return (self._ONE + e) + self._TWO * (self._ONE - e) * x
+        return (D('1') + e) + D('2') * (D('1') - e) * x
 
     @property
     def theoretical_lyapunov(self):
         raise NotImplementedError("No closed form available")
 
+
     def density(self, x):
         e = self.epslon
-        K = (self._ONE - e) / ((self._TWO - e).ln() - e.ln())
-        term1 = self._ONE / (e + (self._ONE - e) * x)
-        term2 = self._ONE / (self._ONE + (self._ONE - e) * x)
+        K = (D('1') - e) / ((D('2') - e).ln() - e.ln())
+        term1 = D('1') / (e + (D('1') - e) * x)
+        term2 = D('1') / (D('1') + (D('1') - e) * x)
         return K * (term1 + term2)
-
 
 class ConjugateTentMap(ChaoticMap):
     domain = (0, 1)
 
     def __init__(self, steps, trans, p, x0=None, prec=50, seed=None):
-        self.p = self._to_decimal(p)
+        self.p = D(str(p))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
         p = self.p
-        q = self._ONE - p
-        if x <= p * p:
-            return x / (p * p)
+        q = D('1') - p
+        if x <= p**2:
+            return x / p**2
         else:
-            t = self._ONE - x.sqrt()
-            return t * t / (q * q)
+            return (D('1') - x.sqrt())**2 / q**2
 
     def df(self, x):
         p = self.p
-        q = self._ONE - p
-        if x <= p * p:
-            return self._ONE / (p * p)
+        q = D('1') - p
+        if x <= p**2:
+            return D('1') / p**2
         else:
-            sx = x.sqrt()  # calculado uma única vez (original chamava .sqrt() 2x)
-            return -(self._ONE - sx) / (q * q * sx)
+            return -(D('1') - x.sqrt()) / (q**2 * x.sqrt())
 
     @property
     def theoretical_lyapunov(self):
         raise NotImplementedError("No closed form available")
 
     def density(self, x):
-        return self._ONE / (self._TWO * x.sqrt())
-
+        return D('1') / (D('2') * x.sqrt())
 
 class ThalerMap(ChaoticMap):
     domain = (0, 1)
 
     def __init__(self, steps, trans, z, x0=None, prec=50, seed=None):
-        self.z = self._to_decimal(z)
+        self.z = D(str(z))
         super().__init__(steps, trans, x0, prec, seed)
 
     def f(self, x):
         z = self.z
-        inner = (x / (self._ONE + x)) ** (z - self._TWO) - x ** (z - self._TWO)
-        return (x * (self._ONE + inner) ** (self._NEG_ONE / (z - self._TWO))) % self._ONE
+        inner = (x / (D('1') + x))**(z - D('2')) - x**(z - D('2'))
+        return (x * (D('1') + inner) ** (D('-1') / (z - D('2')))) % D('1')
 
     def df(self, x):
         z = self.z
-        a = z - self._TWO
-        ratio = x / (self._ONE + x)
-        g = self._ONE + ratio ** a - x ** a
-        dg = (z - self._TWO) * (ratio ** (a - self._ONE) / (self._ONE + x) ** 2 - x ** (a - self._ONE))
-        exp = self._NEG_ONE / a
+        a = z - D('2')                                      # expoente base
+        ratio = x / (D('1') + x)                           # x/(1+x)
+        g = D('1') + ratio**a - x**a                       # g(x)
+        dg = (z - D('2')) * (ratio**(a - D('1')) / (D('1') + x)**2 - x**(a - D('1')))  # g'(x)
+        exp = D('-1') / a                                   # -1/(z-2)
 
-        return g ** exp - x * g ** (exp - self._ONE) * dg
+        return g**exp - x * g**(exp - D('1')) * dg
 
     @property
     def theoretical_lyapunov(self):
@@ -587,6 +581,7 @@ class ThalerMap(ChaoticMap):
 
     def density(self, x):
         z = self.z
-        alpha = self._ONE / (z - self._ONE)
-        exp = self._NEG_ONE / alpha
-        return x ** exp + (self._ONE + x) ** exp
+        alpha = D('1') / (z - D('1'))
+        exp = D('-1') / alpha
+        return x**exp + (D('1') + x)**exp
+        # não normalizada
