@@ -14,5 +14,5 @@ pip install git+https://github.com/EnniodosSantos/lyappy.git
 
 Em construção
 
-https://enniodossantos.github.io/lyappy-docs/
+https://enniodossantos.github.io/lyapy-documentation
 
